@@ -1,0 +1,7 @@
+---
+# static Dockerfile tests
+
+# ensure there are env vars set in the dockerfile
+file:
+  /goss/Dockerfile:
+    exists: true
