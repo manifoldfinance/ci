@@ -1,5 +1,36 @@
 # [`ci`](#)
 
+- [`ci`](#)
+  * [Overview](#overview)
+  * [See](#see)
+  * [Binary Authorization provides:](#binary-authorization-provides-)
+  * [Configuring the Docker daemon](#configuring-the-docker-daemon)
+  * [Pulling cached images](#pulling-cached-images)
+  * [Dockerfile frontend syntaxes](#dockerfile-frontend-syntaxes)
+  * [Note for Docker users](#note-for-docker-users)
+  * [Using external Dockerfile frontend](#using-external-dockerfile-frontend)
+  * [Linked copies `COPY --link`, `ADD --link`](#linked-copies--copy---link----add---link-)
+      - [Benefits of using `--link`](#benefits-of-using----link-)
+      - [Incompatibilities with `--link=false`](#incompatibilities-with----link-false-)
+  * [Build Mounts `RUN --mount=...`](#build-mounts--run---mount--)
+    + [`RUN --mount=type=bind` (the default mount type)](#-run---mount-type-bind---the-default-mount-type-)
+    + [`RUN --mount=type=cache`](#-run---mount-type-cache-)
+      - [Example: cache Go packages](#example--cache-go-packages)
+      - [Example: cache apt packages](#example--cache-apt-packages)
+    + [`RUN --mount=type=tmpfs`](#-run---mount-type-tmpfs-)
+    + [`RUN --mount=type=secret`](#-run---mount-type-secret-)
+      - [Example: access to S3](#example--access-to-s3)
+    + [`RUN --mount=type=ssh`](#-run---mount-type-ssh-)
+      - [Example: access to Gitlab](#example--access-to-gitlab)
+  * [Network modes `RUN --network=none|host|default`](#network-modes--run---network-none-host-default-)
+      - [Example: isolating external effects](#example--isolating-external-effects)
+  * [Here-Documents](#here-documents)
+      - [Example: running a multi-line script](#example--running-a-multi-line-script)
+      - [Example: creating inline files](#example--creating-inline-files)
+  * [Security context `RUN --security=insecure|sandbox`](#security-context--run---security-insecure-sandbox-)
+      - [Example: check entitlements](#example--check-entitlements)
+  * [Built-in build args](#built-in-build-args)
+	
 ## Overview
 
 ![](https://d.pr/i/bwRSZu.jpeg)
@@ -14,7 +45,98 @@
 
 - A policy model that lets you describe the constraints under which images can be deployed.  
 - An attestation model that lets you define trusted authorities who can attest or verify that required processes in your environment have completed before deployment.  
-- A deploy-time enforcer that prevents images that violate the policy from being deployed.  
+- A deploy-time enforcer that prevents images that violate the policy from being deployed.
+
+## Configuring the Docker daemon
+
+To configure your Docker daemon to pull images from the Container Registry cache:
+
+1.  Configure the daemon in one of the following ways:
+    
+    -   To configure the Docker daemon automatically on startup, set the following value in `/etc/docker/daemon.json`
+        
+        ```
+        {  "registry-mirrors": ["https://mirror.gcr.io"]}
+        ```
+        
+    -   When you start the daemon, pass in the Container Registry hostname:
+        
+        ```
+        dockerd --registry-mirror=https://mirror.gcr.io
+        ```
+        
+    -   Add the following line to your `/etc/default/docker` file:
+        
+        ```
+        DOCKER_OPTS="${DOCKER_OPTS} --registry-mirror=https://mirror.gcr.io"
+        ```
+        
+2.  Restart the Docker daemon.
+    
+    -   On Linux, run one of the following commands:
+        
+        ```
+        sudo service docker restart
+        ```
+        
+        or
+        
+        ```
+        sudo service docker stop && sudo service docker start
+        ```
+        
+    -   On macOS or Windows, run the following command:
+        
+        ```
+        docker-machine restart
+        ```
+        
+
+1.  Open Docker's **Preferences** menu.
+2.  Click **Daemon**.
+3.  Click **Advanced**. In the JSON field, add a `registry-mirrors` key with `https://mirror.gcr.io` as a value:
+    
+    ```
+    {  "registry-mirrors" : [    "https://mirror.gcr.io"  ]}
+    ```
+    
+4.  Click **Apply & Restart**.
+    
+
+To verify that the cache is correctly configured, run:
+
+```
+docker system info
+```
+
+The output should include `Registry Mirrors`, and should look similar to the following:
+
+```
+Containers: 2
+ Running: 0
+ Paused: 0
+ Stopped: 2
+Images: 2
+Server Version: 17.03.1-ce
+Storage Driver: overlay2
+ Backing Filesystem: extfs
+ Supports d_type: true
+ Native Overlay Diff: true
+Logging Driver: json-file
+...
+Registry Mirrors:
+ https://mirror.gcr.io
+```
+
+## Pulling cached images
+
+Container Registry adds frequently requested images to the cache so they are available for future requests. It also periodically removes images that are no longer requested.
+
+After you configure the Docker daemon to use the Container Registry cache, Docker performs the following steps when you pull a public Docker Hub image with a `docker pull` command:
+
+1.  The Docker daemon checks the Container Registry cache and fetches the images if it exists. If your daemon configuration includes other Docker mirrors, the daemon checks each one in order for a cached copy of the image.
+2.  If the image still isn't found, the Docker daemon fetches the image from the canonical repository on Docker Hub.
+
 
 ## Dockerfile frontend syntaxes
 
