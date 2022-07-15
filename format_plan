@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+format_plan () {
+	awk '
+    /Terraform will perform the following actions:/ { found=1 }
+    /------------------------------------------------------------------------/ { found=0 }
+    // { if (found) { print $0 } }
+  ' | (
+		printf '<details><summary>Plan for %s</summary>\n\n```diff\n\n' "$1" && perl -pe 's/\x1b\[[0-9;]*[mG]//g' | sed -e 's/^\(  *\)\([\+-]\)/\2\1/' -e 's/^\(  *\)~/!\1/' && printf '```\n</details>'
+	) | pbcopy
+}
